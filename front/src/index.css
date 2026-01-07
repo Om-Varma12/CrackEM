@@ -1,0 +1,254 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  :root {
+    /* Light, airy professional palette */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 263 70% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.75rem;
+
+    /* Custom interview-specific tokens */
+    --glass: 210 40% 98%;
+    --glass-border: 214 32% 91%;
+    --avatar-primary: 217 91% 60%;
+    --avatar-secondary: 263 70% 58%;
+    --avatar-warm: 32 98% 65%;
+    --recording: 0 84% 60%;
+    
+    /* Keep orb tokens for compatibility */
+    --orb-primary: 217 91% 60%;
+    --orb-secondary: 263 70% 58%;
+    --orb-tertiary: 32 98% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-card border border-border rounded-xl;
+    box-shadow: 
+      0 1px 3px 0 rgba(0, 0, 0, 0.05),
+      0 4px 16px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  .glass-panel-strong {
+    @apply bg-card border border-border rounded-xl;
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.05),
+      0 10px 25px -5px rgba(0, 0, 0, 0.08);
+  }
+
+  .interview-button {
+    @apply px-6 py-3 rounded-xl font-medium transition-all duration-200 ease-out;
+    @apply hover:scale-[1.02] active:scale-[0.98];
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .interview-button-primary {
+    @apply interview-button bg-primary text-primary-foreground;
+    @apply hover:bg-primary/90;
+    box-shadow: 0 2px 8px -2px hsl(var(--primary) / 0.4);
+  }
+
+  .interview-button-primary:hover {
+    box-shadow: 0 4px 12px -2px hsl(var(--primary) / 0.5);
+  }
+
+  .interview-button-secondary {
+    @apply interview-button bg-secondary text-secondary-foreground border border-border;
+    @apply hover:bg-muted;
+  }
+
+  .interview-button-danger {
+    @apply interview-button bg-destructive text-destructive-foreground;
+    @apply hover:bg-destructive/90;
+    box-shadow: 0 2px 8px -2px hsl(var(--destructive) / 0.4);
+  }
+
+  .control-button {
+    @apply p-3 rounded-xl transition-all duration-200 ease-out;
+    @apply bg-secondary border border-border hover:bg-muted;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary/30;
+  }
+
+  .control-button-active {
+    @apply bg-primary/10 border-primary/30;
+  }
+
+  .control-button-danger {
+    @apply bg-destructive/10 border-destructive/30 text-destructive;
+  }
+
+  .status-indicator {
+    @apply flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium;
+    @apply bg-secondary border border-border;
+  }
+
+  .recording-dot {
+    @apply w-2.5 h-2.5 rounded-full bg-destructive;
+    animation: pulse-recording 1.5s ease-in-out infinite;
+  }
+
+  /* Avatar container */
+  .avatar-container {
+    @apply relative w-40 h-40 md:w-48 md:h-48;
+  }
+
+  /* Friendly avatar circle */
+  .avatar-circle {
+    @apply absolute inset-0 rounded-full bg-gradient-to-br from-primary via-accent to-primary;
+    animation: avatar-breathe 4s ease-in-out infinite;
+  }
+
+  .avatar-inner {
+    @apply absolute inset-2 rounded-full bg-card flex items-center justify-center;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .avatar-face {
+    @apply w-full h-full flex flex-col items-center justify-center;
+  }
+
+  /* Sound wave animation */
+  .sound-waves {
+    @apply absolute -bottom-6 left-1/2 -translate-x-1/2 flex items-end gap-1;
+  }
+
+  .sound-wave-bar {
+    @apply w-1 bg-primary rounded-full;
+    animation: sound-wave 0.6s ease-in-out infinite;
+  }
+
+  .sound-wave-bar:nth-child(1) { animation-delay: 0s; height: 8px; }
+  .sound-wave-bar:nth-child(2) { animation-delay: 0.1s; height: 16px; }
+  .sound-wave-bar:nth-child(3) { animation-delay: 0.2s; height: 24px; }
+  .sound-wave-bar:nth-child(4) { animation-delay: 0.1s; height: 16px; }
+  .sound-wave-bar:nth-child(5) { animation-delay: 0s; height: 8px; }
+
+  .sound-waves-idle .sound-wave-bar {
+    animation: none;
+    height: 4px;
+    opacity: 0.3;
+  }
+
+  .video-frame {
+    @apply relative rounded-2xl overflow-hidden border border-border;
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.05),
+      0 10px 25px -5px rgba(0, 0, 0, 0.08);
+  }
+
+  .question-text {
+    @apply text-lg md:text-xl leading-relaxed text-foreground;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Keep orb styles for backward compatibility but hide them */
+  .orb-container { @apply hidden; }
+}
+
+@layer utilities {
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.5s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out forwards;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
+}
+
+@keyframes avatar-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+@keyframes sound-wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1.5); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.05); }
+}
