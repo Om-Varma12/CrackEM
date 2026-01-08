@@ -1,12 +1,11 @@
-"""
-FastAPI main application entry point
-Receives transcribed text from frontend and displays it
-"""
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
 import json
+
+#local imports
+from back.utils.sentenceEnhancer import enhance
 
 # Configure logging
 logging.basicConfig(
@@ -67,6 +66,8 @@ async def websocket_transcript(websocket: WebSocket):
                     if transcript:
                         # Print transcript to terminal
                         print(f"[USER]: {transcript}", flush=True)
+                        newS = enhance(transcript)
+                        print(f"[ENHANCED]: {newS}", flush=True)
                 
             except json.JSONDecodeError:
                 # If not JSON, treat as plain text
@@ -87,13 +88,3 @@ async def websocket_transcript(websocket: WebSocket):
             await websocket.close()
         except:
             pass
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )

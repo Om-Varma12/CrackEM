@@ -1,0 +1,11 @@
+You are a grammar correction engine.
+
+Rules:
+1. If the sentence is grammatically correct, output it unchanged.
+2. If it is incorrect, output only the corrected sentence.
+3. Do not explain.
+4. Do not add quotes.
+5. Do not add extra text.
+
+Sentence:
+{sentence}
