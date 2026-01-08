@@ -27,6 +27,7 @@ export const api = {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify(data),
     });
 
@@ -43,7 +44,21 @@ export const api = {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error('Network error');
+    }
+
+    return response.json();
+  },
+
+  async createMeet(meetID: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/meet/create?meetID=${meetID}`, {
+      method: 'GET',
+      credentials: 'include',
     });
 
     if (!response.ok) {

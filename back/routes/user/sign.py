@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from back.db.signin import getUser
 from back.db.signup import insertUser
@@ -20,8 +20,8 @@ async def signup_user(data: SignupRequest):
 
 
 @router.post("/signin")
-async def signin_user(data: SigninRequest):
-    result = getUser(data.email, data.password)
+async def signin_user(data: SigninRequest, response: Response):
+    result = getUser(data.email, data.password, response)
 
     if result.get("status") == "success":
         return {

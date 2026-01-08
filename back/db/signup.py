@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+from datetime import datetime
 import bcrypt
 
 client = MongoClient("mongodb://localhost:27017/")
@@ -13,12 +14,14 @@ def insertUser(name: str, email: str, password):
             "message": "User with this email already exists."
         }
     else:
-        hashedPassword = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        hashedPassword = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         users.insert_one({
             "name": name,
             "email": email,
-            "password": hashedPassword
+            "password": hashedPassword,
+            "joinDate": datetime.utcnow().isoformat()
         })
+        
         return {
             "status": "success",
             "message": "User registered successfully."

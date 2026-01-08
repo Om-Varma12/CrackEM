@@ -6,6 +6,7 @@ Rules:
 3. Do not explain.
 4. Do not add quotes.
 5. Do not add extra text.
+6. The might consist of shortform of colleges from India.
 
 Sentence:
 {sentence}

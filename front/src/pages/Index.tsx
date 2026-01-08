@@ -10,6 +10,7 @@ import AuthModal from '@/components/auth/AuthModal';
 import { useAudioAnalyzer } from '@/hooks/useAudioAnalyzer';
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition';
 import { Sparkles } from 'lucide-react';
+import { api } from '@/lib/api';
 
 const INTERVIEW_QUESTIONS = [
   "Tell me about yourself and your background. What drives your passion for this field?",
@@ -62,16 +63,27 @@ const Index = () => {
     return () => clearTimeout(timeout);
   }, [currentQuestionIndex, isInterviewActive]);
 
-  const handleStartInterview = useCallback(() => {
+  const handleStartInterview = useCallback(async () => {
     // Check if user is logged in before starting interview
     if (!user) {
       setIsAuthModalOpen(true);
       return;
     }
     
-    setIsInterviewActive(true);
-    setCurrentQuestionIndex(0);
-    setStatus('speaking');
+    try {
+      // Generate random 15-20 char hash for meetID
+      const meetID = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      // Call backend to create meet
+      await api.createMeet(meetID);
+      
+      setIsInterviewActive(true);
+      setCurrentQuestionIndex(0);
+      setStatus('speaking');
+    } catch (error) {
+      console.error('Failed to start interview:', error);
+      // Optionally handle error (e.g. show toast)
+    }
   }, [user]);
 
   const handleEndInterview = useCallback(() => {
