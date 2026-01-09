@@ -16,44 +16,68 @@ export const useSpeechRecognition = (isEnabled: boolean): UseSpeechRecognitionRe
   const wsRef = useRef<WebSocket | null>(null);
   const isRecognizingRef = useRef(false);
   const sentenceBufferRef = useRef<string>('');
+  const interimBufferRef = useRef<string>('');
   const silenceTimeoutRef = useRef<number | null>(null);
-  const SILENCE_DURATION = 2500; // 2.5 seconds of silence before sending sentence
+  const lastInterimSentRef = useRef<number>(0);
+  const SILENCE_DURATION = 600; // 600ms of silence before sending final sentence
+  const INTERIM_THROTTLE_MS = 400; // send interim updates at most once every 400ms
 
-  const sendSentence = useCallback((sentence: string) => {
+  const sendSentence = useCallback((sentence: string, type: 'transcript' | 'interim' = 'transcript', clearBuffer = false) => {
     if (!sentence.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       return;
     }
 
     try {
       wsRef.current.send(JSON.stringify({
-        type: 'transcript',
+        type,
         text: sentence.trim()
       }));
-      sentenceBufferRef.current = '';
+      if (clearBuffer && type === 'transcript') {
+        sentenceBufferRef.current = '';
+      }
     } catch (error) {
       console.error('Error sending transcript:', error);
     }
   }, []);
 
   const handleResult = useCallback((event: SpeechRecognitionEvent) => {
-    const transcript = event.results[event.results.length - 1][0].transcript;
-    
-    if (transcript.trim()) {
-      // Clear previous silence timeout
-      if (silenceTimeoutRef.current !== null) {
-        window.clearTimeout(silenceTimeoutRef.current);
-      }
+    const lastResult = event.results[event.results.length - 1];
+    const transcript = lastResult[0].transcript;
+    const isFinal = lastResult.isFinal;
 
-      // Add to sentence buffer
+    if (!transcript.trim()) return;
+
+    // Clear previous silence timeout
+    if (silenceTimeoutRef.current !== null) {
+      window.clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+
+    if (isFinal) {
+      // Append to buffer and send final transcript immediately
       if (sentenceBufferRef.current) {
         sentenceBufferRef.current += ' ' + transcript;
       } else {
         sentenceBufferRef.current = transcript;
       }
+      sendSentence(sentenceBufferRef.current, 'transcript', true);
+    } else {
+      // Interim result: send throttled interim updates
+      interimBufferRef.current = transcript;
+      const now = Date.now();
+      if (now - lastInterimSentRef.current >= INTERIM_THROTTLE_MS) {
+        sendSentence(interimBufferRef.current, 'interim', false);
+        lastInterimSentRef.current = now;
+      }
 
-      // Set timeout to send sentence after silence
+      // Also set a silence timeout to promote interim to final when user pauses
       silenceTimeoutRef.current = window.setTimeout(() => {
-        sendSentence(sentenceBufferRef.current);
+        if (sentenceBufferRef.current) {
+          sendSentence(sentenceBufferRef.current, 'transcript', true);
+        } else if (interimBufferRef.current) {
+          // Promote interim to final if nothing buffered
+          sendSentence(interimBufferRef.current, 'transcript', true);
+        }
       }, SILENCE_DURATION);
     }
   }, [sendSentence]);
@@ -61,7 +85,7 @@ export const useSpeechRecognition = (isEnabled: boolean): UseSpeechRecognitionRe
   const handleEnd = useCallback(() => {
     // Send any remaining sentence when recognition ends
     if (sentenceBufferRef.current.trim()) {
-      sendSentence(sentenceBufferRef.current);
+      sendSentence(sentenceBufferRef.current, 'transcript', true);
     }
   }, [sendSentence]);
 
@@ -98,7 +122,7 @@ export const useSpeechRecognition = (isEnabled: boolean): UseSpeechRecognitionRe
       // Initialize Speech Recognition
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
-      recognition.interimResults = false;
+      recognition.interimResults = true;
       recognition.lang = 'en-US';
       recognition.maxAlternatives = 1;
 
@@ -108,7 +132,7 @@ export const useSpeechRecognition = (isEnabled: boolean): UseSpeechRecognitionRe
         if (event.error === 'no-speech') {
           // No speech detected, send pending sentence if exists
           if (sentenceBufferRef.current.trim()) {
-            sendSentence(sentenceBufferRef.current);
+            sendSentence(sentenceBufferRef.current, 'transcript', true);
           }
         }
       };
@@ -156,7 +180,7 @@ export const useSpeechRecognition = (isEnabled: boolean): UseSpeechRecognitionRe
     if (wsRef.current) {
       // Send any remaining sentence before closing
       if (sentenceBufferRef.current.trim()) {
-        sendSentence(sentenceBufferRef.current);
+        sendSentence(sentenceBufferRef.current, 'transcript', true);
       }
       wsRef.current.close();
       wsRef.current = null;

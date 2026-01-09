@@ -24,6 +24,11 @@ async def websocket_transcript(websocket: WebSocket):
             try:
                 message = json.loads(data)
 
+                if message.get("type") == "interim" and message.get("text"):
+                    interim = message["text"].strip()
+                    if interim:
+                        print(f"[USER - interim]: {interim}", flush=True)
+
                 if message.get("type") == "transcript" and message.get("text"):
                     transcript = message["text"].strip()
 
