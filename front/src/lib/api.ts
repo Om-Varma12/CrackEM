@@ -67,5 +67,18 @@ export const api = {
 
     return response.json();
   },
+
+  async welcome(meetID: string): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/meet/welcome?meetID=${meetID}`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+        throw new Error('Network error');
+    }
+    
+    return response.json();
+  },
 };
 

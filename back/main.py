@@ -6,6 +6,7 @@ import logging
 from back.routes.user.sign import router as user_router
 from back.routes.ws.transcript import router as ws_router
 from back.routes.meet.creation import router as meetCreation_router
+from back.routes.meet.welcome import router as welcome_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,6 +19,7 @@ app = FastAPI(title="Interview AI Backend")
 app.include_router(user_router)
 app.include_router(ws_router)
 app.include_router(meetCreation_router)
+app.include_router(welcome_router)
 
 app.add_middleware(
     CORSMiddleware,
