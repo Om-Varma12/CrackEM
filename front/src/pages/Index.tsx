@@ -38,6 +38,7 @@ const Index = () => {
   // Auth state
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
 
   // Real-time audio analysis
   const { volumeLevel } = useAudioAnalyzer(isInterviewActive && isMicOn);
@@ -76,6 +77,17 @@ const Index = () => {
       
       // Call backend to create meet
       await api.createMeet(meetID);
+
+      // Wait 2 seconds
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Fetch welcome message
+      const welcomeData = await api.welcome(meetID);
+      setWelcomeMessage(welcomeData.message);
+
+      // Speak the welcome message
+      const utterance = new SpeechSynthesisUtterance(welcomeData.message);
+      window.speechSynthesis.speak(utterance);
       
       setIsInterviewActive(true);
       setCurrentQuestionIndex(0);
@@ -183,7 +195,7 @@ const Index = () => {
               />
               
               <QuestionDisplay
-                question={INTERVIEW_QUESTIONS[currentQuestionIndex]}
+                question={welcomeMessage || INTERVIEW_QUESTIONS[currentQuestionIndex]}
                 isActive={isInterviewActive}
               />
             </div>
