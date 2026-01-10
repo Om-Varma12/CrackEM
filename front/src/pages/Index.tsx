@@ -45,7 +45,28 @@ const Index = () => {
   const { volumeLevel } = useAudioAnalyzer(isInterviewActive && isMicOn);
   
   // Speech recognition - sends transcripts to backend for grammar checking
-  useSpeechRecognition(isInterviewActive && isMicOn, meetID ?? undefined);
+  const [aiMessage, setAiMessage] = useState<string | null>(null);
+
+  const handleAiResponse = useCallback((text: string) => {
+    // Stop any ongoing speech and play the incoming AI response
+    try {
+      window.speechSynthesis.cancel();
+    } catch (e) { /* ignore */ }
+
+    setAiMessage(text);
+    setStatus('speaking');
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onend = () => {
+      setStatus('listening');
+      // clear AI message shortly after speaking so UI can progress
+      setTimeout(() => setAiMessage(null), 1500);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  useSpeechRecognition(isInterviewActive && isMicOn, meetID ?? undefined, handleAiResponse);
 
   useEffect(() => {
     setMounted(true);
@@ -200,7 +221,7 @@ const Index = () => {
               />
               
               <QuestionDisplay
-                question={welcomeMessage || INTERVIEW_QUESTIONS[currentQuestionIndex]}
+                question={aiMessage || welcomeMessage || INTERVIEW_QUESTIONS[currentQuestionIndex]}
                 isActive={isInterviewActive}
               />
             </div>

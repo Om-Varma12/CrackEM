@@ -11,7 +11,7 @@ interface UseSpeechRecognitionReturn {
  * Hook for speech recognition using Web Speech API
  * Sends transcribed text to backend via WebSocket
  */
-export const useSpeechRecognition = (isEnabled: boolean, meetID?: string): UseSpeechRecognitionReturn => {
+export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiResponse?: (text: string) => void): UseSpeechRecognitionReturn => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isRecognizingRef = useRef(false);
@@ -130,6 +130,24 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string): UseSp
       };
 
       wsRef.current = ws;
+
+      // Listen for AI responses from the server and handle TTS / UI callback
+      ws.onmessage = (evt: MessageEvent) => {
+        try {
+          const data = JSON.parse(evt.data);
+          if (data.type === 'ai_response' && data.text) {
+            console.log('AI response received:', data.text);
+            if (onAiResponse) {
+              onAiResponse(data.text);
+            } else {
+              const utterance = new SpeechSynthesisUtterance(data.text);
+              window.speechSynthesis.speak(utterance);
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing WebSocket message:', e);
+        }
+      };
 
       // Initialize Speech Recognition
       const recognition = new SpeechRecognition();

@@ -1,5 +1,5 @@
 from back.db.welcome import getNameForWelcome
-from back.db.messages import putMessage
+from back.db.utils.messages import putMessage
 
 s = "I'm Jarvis, your AI interviewer. I'll be guiding you through today's interview. Let's begin."
 

@@ -5,7 +5,8 @@ import asyncio
 import time
 
 from back.utils.sentenceEnhancer import enhance
-from back.db.messages import putMessage
+from back.db.utils.messages import putMessage
+from ai.models.agent import startAgent
 
 logger = logging.getLogger(__name__)
 
@@ -65,14 +66,26 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None):
                         try:
                             await asyncio.sleep(ENHANCE_DELAY)
 
-                            # If no newer transcript came in meantime
                             if text_snapshot == last_transcript:
+                                # 1. Run your LLM / logic
                                 newS = enhance(text_snapshot)
+
                                 print(f"[ENHANCED]: {newS}", flush=True)
+
+                                # 2. Save to DB if needed
                                 if meetID:
-                                    putMessage(meetID, "user", newS)
-                                else:
-                                    logger.warning("No meetID available; skipping DB insert for message")
+                                    putMessage(meetID,  newS, "user",)
+                                    
+                                aiResponse = startAgent(meetID)
+
+                                # 3. SEND BACK TO FRONTEND 🔥
+                                await websocket.send_text(json.dumps({
+                                    "type": "ai_response",
+                                    "text": aiResponse
+                                }))
+
+                        except asyncio.CancelledError:
+                            pass
 
                         except asyncio.CancelledError:
                             pass

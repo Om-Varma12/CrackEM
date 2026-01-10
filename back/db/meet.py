@@ -26,6 +26,7 @@ def makeMeet(sessionID: str, meetID: str):
         "questions": Qs[0],
         "firstHalfQ": Qs[1],
         "secondHalfQ": Qs[0] - Qs[1],
+        "questionAsked": 0,
         "createdAt": datetime.utcnow()
     })
 
