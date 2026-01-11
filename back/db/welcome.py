@@ -8,6 +8,19 @@ users = db["users"]
 
 
 def getNameForWelcome(session_id: str):
-    user_id = sessions.find_one({"session_id": session_id})["user_id"]
-    name = users.find_one({"_id": user_id})
-    return name["name"]
+    if not session_id:
+        return "Candidate"
+        
+    session = sessions.find_one({"session_id": session_id})
+    if not session:
+        return "Candidate"
+        
+    user_id = session.get("user_id")
+    if not user_id:
+        return "Candidate"
+        
+    user = users.find_one({"_id": user_id})
+    if not user:
+        return "Candidate"
+        
+    return user.get("name", "Candidate")

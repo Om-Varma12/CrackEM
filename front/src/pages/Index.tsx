@@ -36,8 +36,32 @@ const Index = () => {
   const [mounted, setMounted] = useState(false);
   const [meetID, setMeetID] = useState<string | null>(null);
   
-  // Auth state
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  // Cookie helpers
+  const setCookie = (name: string, value: string, days: number) => {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/';
+  };
+
+  const getCookie = (name: string) => {
+    return document.cookie.split('; ').reduce((r, v) => {
+      const parts = v.split('=');
+      return parts[0] === name ? decodeURIComponent(parts[1]) : r;
+    }, '');
+  };
+
+  const deleteCookie = (name: string) => {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+  };
+
+  // Auth state initialized from cookie
+  const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
+    const saved = getCookie('user_session');
+    try {
+        return saved ? JSON.parse(saved) : null;
+    } catch {
+        return null;
+    }
+  });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [welcomeMessage, setWelcomeMessage] = useState<string | null>(null);
 
@@ -47,23 +71,25 @@ const Index = () => {
   // Speech recognition - sends transcripts to backend for grammar checking
   const [aiMessage, setAiMessage] = useState<string | null>(null);
 
-  const handleAiResponse = useCallback((text: string) => {
-    // Stop any ongoing speech and play the incoming AI response
-    try {
-      window.speechSynthesis.cancel();
-    } catch (e) { /* ignore */ }
-
+  const handleAiResponse = useCallback((text: string, isDone: boolean) => {
     setAiMessage(text);
-    setStatus('speaking');
+    
+    if (isDone) {
+      // Stop any ongoing speech and play the incoming AI response
+      try {
+        window.speechSynthesis.cancel();
+      } catch (e) { /* ignore */ }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.onend = () => {
-      setStatus('listening');
-      // clear AI message shortly after speaking so UI can progress
-      setTimeout(() => setAiMessage(null), 1500);
-    };
+      setStatus('speaking');
 
-    window.speechSynthesis.speak(utterance);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onend = () => {
+        setStatus('listening');
+        // Do not clear AI message so it stays visible
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
   }, []);
 
   useSpeechRecognition(isInterviewActive && isMicOn, meetID ?? undefined, handleAiResponse);
@@ -140,11 +166,13 @@ const Index = () => {
 
   const handleAuthSuccess = useCallback((authUser: { name: string; email: string }) => {
     setUser(authUser);
+    setCookie('user_session', JSON.stringify(authUser), 7);
     setIsAuthModalOpen(false);
   }, []);
 
   const handleSignOut = useCallback(() => {
     setUser(null);
+    deleteCookie('user_session');
   }, []);
 
   return (

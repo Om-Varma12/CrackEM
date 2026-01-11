@@ -14,7 +14,7 @@ def enhance_sentence(sentence: str):
     res = requests.post(
         "http://localhost:11434/api/generate",
         json={
-            "model": "gnokit/improve-grammar",
+            "model": "llama3.1:8b",
             "prompt": prompt,
             "stream": True
         },

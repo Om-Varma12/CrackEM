@@ -11,14 +11,16 @@ interface UseSpeechRecognitionReturn {
  * Hook for speech recognition using Web Speech API
  * Sends transcribed text to backend via WebSocket
  */
-export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiResponse?: (text: string) => void): UseSpeechRecognitionReturn => {
+export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiResponse?: (text: string, isDone: boolean) => void): UseSpeechRecognitionReturn => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isRecognizingRef = useRef(false);
   const sentenceBufferRef = useRef<string>('');
   const interimBufferRef = useRef<string>('');
   const silenceTimeoutRef = useRef<number | null>(null);
+
   const lastInterimSentRef = useRef<number>(0);
+  const aiResponseBufferRef = useRef<string>('');
   const SILENCE_DURATION = 600; // 600ms of silence before sending final sentence
   const INTERIM_THROTTLE_MS = 400; // send interim updates at most once every 400ms
 
@@ -135,10 +137,23 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
       ws.onmessage = (evt: MessageEvent) => {
         try {
           const data = JSON.parse(evt.data);
-          if (data.type === 'ai_response' && data.text) {
+          
+          if (data.type === 'ai_response_chunk' && data.text) {
+             aiResponseBufferRef.current += data.text;
+             if (onAiResponse) {
+               onAiResponse(aiResponseBufferRef.current, false);
+             }
+          } else if (data.type === 'ai_response_done') {
+             if (onAiResponse) {
+               onAiResponse(aiResponseBufferRef.current, true);
+             }
+             // Reset buffer after done
+             aiResponseBufferRef.current = '';
+          } else if (data.type === 'ai_response' && data.text) {
+            // Fallback / legacy support
             console.log('AI response received:', data.text);
             if (onAiResponse) {
-              onAiResponse(data.text);
+              onAiResponse(data.text, true);
             } else {
               const utterance = new SpeechSynthesisUtterance(data.text);
               window.speechSynthesis.speak(utterance);

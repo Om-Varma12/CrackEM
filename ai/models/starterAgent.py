@@ -1,6 +1,6 @@
 import os
 import json
-import requests
+import httpx
 
 from back.db.utils.getMessages import getMeetMessages
 from back.db.utils.messages import putMessage
@@ -13,36 +13,43 @@ PROMPT_PATH = os.path.join(BASE_DIR, "..", "prompts", "starterAgent.txt")
 with open(PROMPT_PATH, "r", encoding="utf-8") as f:
     PROMPT_TEMPLATE = f.read()
 
-def invokeStarterAgent(meetID):
+async def invokeStarterAgent(meetID):
     context = getMeetMessages(meetID)
     
     if not context or not context.strip():
         context = "No previous conversation."
     
+    # print(context)
+    
     prompt = PROMPT_TEMPLATE.replace("<<MEET_HISTORY_FROM_DATABASE>>", context)
     
-    res = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "llama3.1:8b",
-            "prompt": prompt,
-            "stream": True
-        },
-        stream=True,
-        timeout=120
-    )
-
     final_text = ""
+    
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream(
+            "POST",
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "llama3.1:8b",
+                "prompt": prompt,
+                "stream": True
+            }
+        ) as response:
+            async for line in response.aiter_lines():
+                if line:
+                    try:
+                        data = json.loads(line)
+                        if "response" in data:
+                            chunk = data["response"]
+                            final_text += chunk
+                            yield chunk
+                        if data.get("done", False):
+                            pass
+                    except json.JSONDecodeError:
+                        pass
 
-    for line in res.iter_lines():
-        if line:
-            data = json.loads(line.decode("utf-8"))
-            if "response" in data:
-                final_text += data["response"]
-
-    putMessage(meetID, "Jarvis", final_text)
-
+    putMessage(meetID, final_text, "Jarvis")
     print(final_text)
-    return final_text
+    # No return needed as it is a generator, usage will be consuming the yields
 
 # print(invokeStarterAgent("pro3j789xhenpyh4oodzhl"))
