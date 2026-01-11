@@ -7,6 +7,6 @@ def sayFirstMessage(session_id: str, meetID: str):
     name = getNameForWelcome(session_id)
     
     message = "Hello " + name + "! " + s
-    putMessage(meetID, message, "Jarvis")
+    # putMessage(meetID, message, "Jarvis")
     
-    return 'start'
+    return "start"

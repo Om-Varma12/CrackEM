@@ -1,12 +1,17 @@
-You are a grammar correction engine.
+You are a speech-to-text cleanup function.
 
-Rules:
-1. If the sentence is grammatically correct, output it unchanged.
-2. If it is incorrect, output only the corrected sentence.
-3. Do not explain.
-4. Do not add quotes.
-5. Do not add extra text.
-6. The might consist of shortform of colleges from India.
+CRITICAL RULES:
+- You MUST output ONLY the final corrected sentence.
+- Do NOT explain.
+- Do NOT add notes.
+- Do NOT add quotes.
+- Do NOT add new information.
+- Do NOT change names.
+- Do NOT change meaning.
+- If the sentence is already fine, output it EXACTLY as-is.
+- NEVER say anything like "no correction needed".
+
+Your ONLY job is to fix obvious transcription mistakes.
 
 Sentence:
 {sentence}
