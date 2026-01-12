@@ -9,6 +9,7 @@ import { useAuthStore } from "@/store/authStore";
 const Home = () => {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const login = useAuthStore((state) => state.login);
+    const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
     const navigate = useNavigate();
 
     const handleAuthSuccess = useCallback(
@@ -91,7 +92,7 @@ const Home = () => {
                     className="mt-12"
                 >
                     <button
-                        onClick={() => setIsAuthModalOpen(true)}
+                        onClick={() => isAuthenticated ? navigate("/interview") :setIsAuthModalOpen(true) }
                         className="px-10 py-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-lg font-medium shadow-lg hover:shadow-xl transition-all"
                     >
                         Sign in & Start Interview

@@ -32,7 +32,6 @@ const AuthModal = ({ isOpen, onClose, onAuthSuccess }: AuthModalProps) => {
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
   const [signInPasswordVisible, setSignInPasswordVisible] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
 
   // Sign Up form state
   const [signUpName, setSignUpName] = useState('');
@@ -190,7 +189,6 @@ const AuthModal = ({ isOpen, onClose, onAuthSuccess }: AuthModalProps) => {
     setSignUpPasswordVisible(false);
     setSignUpConfirmPassword('');
     setSignUpConfirmPasswordVisible(false);
-    setRememberMe(false);
     setAgreeTerms(false);
     setErrors({});
     setSuccessMessage('');
@@ -345,16 +343,6 @@ const AuthModal = ({ isOpen, onClose, onAuthSuccess }: AuthModalProps) => {
                         transition={{ delay: getFieldDelay(2) }}
                         className="flex items-center justify-between"
                       >
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="remember"
-                            checked={rememberMe}
-                            onCheckedChange={(checked) => setRememberMe(checked === true)}
-                          />
-                          <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">
-                            Remember me
-                          </Label>
-                        </div>
                         <button type="button" className="text-sm text-primary hover:underline">
                           Forgot password?
                         </button>
