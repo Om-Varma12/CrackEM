@@ -1,8 +1,12 @@
 from pymongo import MongoClient
 from datetime import datetime
 import bcrypt
+from dotenv import load_dotenv
+import os
 
-client = MongoClient("mongodb://localhost:27017/")
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
 db = client["CrackEM"]
 users = db["users"]
 
