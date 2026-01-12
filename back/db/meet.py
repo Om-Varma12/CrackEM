@@ -1,8 +1,12 @@
 from pymongo import MongoClient
 from datetime import datetime
 from back.services.getNoOfQ import getQ
+from dotenv import load_dotenv
+import os
 
-client = MongoClient("mongodb://localhost:27017/")
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
 db = client["CrackEM"]
 meets = db["meets"]
 sessions = db["sessions"]

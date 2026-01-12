@@ -1,8 +1,16 @@
+import os
+from dotenv import load_dotenv
 from pymongo import MongoClient
-from datetime import datetime
 
-client = MongoClient('mongodb://localhost:27017/')
-db = client['CrackEM']
+load_dotenv()
+
+MONGO_URI = os.getenv("MONGO_URI")
+
+if not MONGO_URI:
+    raise Exception("❌ MONGO_URI not found in .env")
+
+client = MongoClient(MONGO_URI)
+db = client["CrackEM"]
 meets = db["meets"]
 
 def getNoOfAskedQs(meetID: str):
@@ -14,4 +22,4 @@ def getNoOfAskedQs(meetID: str):
         "questionAsked": meet["questionAsked"],
     }
 
-# print(getNoOfAskedQs("pro3j789xhenpyh4oodzhl"))
+# print(getNoOfAskedQs("pprdmw8ktoxeoktwe0ma"))
