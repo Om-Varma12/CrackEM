@@ -1,5 +1,5 @@
 from back.db.utils.getQs import getNoOfAskedQs
-from ai.models.starterAgent import invokeStarterAgent
+from ai.agents.starterAgent import invokeStarterAgent
 from back.db.utils.updateQs import incrementAskedQs
 
 async def startAgent(meetID: str):

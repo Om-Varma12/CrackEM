@@ -6,7 +6,7 @@ import time
 
 from back.utils.sentenceEnhancer import enhance
 from back.db.utils.messages import putMessage
-from ai.models.agent import startAgent
+from ai.agents.mainAgent import startAgent
 
 logger = logging.getLogger(__name__)
 
