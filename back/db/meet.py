@@ -1,6 +1,5 @@
 from pymongo import MongoClient
 from datetime import datetime
-from back.services.getNoOfQ import getQ
 from dotenv import load_dotenv
 import os
 
@@ -11,7 +10,7 @@ db = client["CrackEM"]
 meets = db["meets"]
 sessions = db["sessions"]
 
-def makeMeet(sessionID: str, meetID: str):
+def makeMeet(sessionID: str, meetID: str, total_questions: int, technical_topics: list, dsa_questions: list):
     session = sessions.find_one({"session_id": sessionID})
 
     if not session:
@@ -20,19 +19,19 @@ def makeMeet(sessionID: str, meetID: str):
             "message": "User not found"
         }
 
-    Qs = getQ()
-
     user_id = session["user_id"]
 
     meets.insert_one({
         "user_id": user_id,
         "meet_id": meetID,
-        "questions": Qs[0],
-        "firstHalfQ": Qs[1],
-        "secondHalfQ": Qs[0] - Qs[1],
         "questionAsked": 0,
+        "candidate_questions": ['intro of candidate', 'strengths and weaknesses', 'tech stack', 'candidate preferences', 'interests'],
+        "total_questions": total_questions,
+        "technical_topics": technical_topics,
+        "dsa_questions": dsa_questions,
         "createdAt": datetime.utcnow()
     })
+    print("MONGO INSERTED ID:")
 
     return {
         "status": "success",

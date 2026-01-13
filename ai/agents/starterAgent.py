@@ -25,6 +25,8 @@ async def invokeStarterAgent(meetID):
     
     final_text = ""
     
+    # print(prompt)
+    
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream(
             "POST",
