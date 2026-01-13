@@ -26,7 +26,7 @@ def makeMeet(sessionID: str, meetID: str, total_questions: int, technical_topics
         "meet_id": meetID,
         "questionAsked": 0,
         "candidate_questions": ['intro of candidate', 'strengths and weaknesses', 'tech stack', 'candidate preferences', 'interests'],
-        "total_questions": total_questions,
+        "total_questions": total_questions+2,
         "technical_topics": technical_topics,
         "dsa_questions": dsa_questions,
         "createdAt": datetime.utcnow()

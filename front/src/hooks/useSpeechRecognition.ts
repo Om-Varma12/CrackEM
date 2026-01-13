@@ -139,10 +139,27 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
           } else if (data.type === 'ai_response' && data.text) {
             // Fallback / legacy support
             console.log('AI response received:', data.text);
+            const rawText = data.text;
+
             if (onAiResponse) {
-              onAiResponse(data.text, true);
+              onAiResponse(rawText, true);
             } else {
-              const utterance = new SpeechSynthesisUtterance(data.text);
+              // Try to extract `question` field if the AI response is JSON
+              let speakText = rawText;
+              const looksLikeJson = typeof rawText === 'string' && (rawText.trim().startsWith('{') || rawText.trim().startsWith('['));
+              if (looksLikeJson) {
+                try {
+                  const parsed = JSON.parse(rawText);
+                  if (parsed && typeof parsed === 'object' && 'question' in parsed) {
+                    const q = (parsed as any).question;
+                    speakText = typeof q === 'string' ? q : JSON.stringify(q);
+                  }
+                } catch (e) {
+                  // ignore parse errors
+                }
+              }
+
+              const utterance = new SpeechSynthesisUtterance(speakText);
               window.speechSynthesis.speak(utterance);
             }
           }
