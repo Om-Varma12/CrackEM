@@ -55,10 +55,13 @@ const Index = () => {
     setAiMessage(text);
 
     if (done) {
+      // Use the extracted question text for TTS (fallback to raw text)
+      const speakText = extractQuestion(text) || text;
+
       window.speechSynthesis.cancel();
       setStatus("speaking");
 
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(speakText);
       utterance.onend = () => setStatus("listening");
       window.speechSynthesis.speak(utterance);
     }
@@ -106,6 +109,24 @@ const Index = () => {
     setWelcomeMessage(null);
   }, []);
 
+  // Helper: extract `question` field if incoming AI message is JSON
+  const extractQuestion = (msg: string | null) => {
+    if (!msg) return msg;
+    // quick heuristic: try parse if it looks like JSON
+    const looksLikeJson = msg.trim().startsWith("{") || msg.trim().startsWith("[");
+    if (!looksLikeJson) return msg;
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed && typeof parsed === "object" && "question" in parsed) {
+        const q = (parsed as any).question;
+        return typeof q === "string" ? q : JSON.stringify(q);
+      }
+      return msg;
+    } catch (e) {
+      return msg;
+    }
+  };
+
   /* =====================
      RENDER
   ====================== */
@@ -139,8 +160,8 @@ const Index = () => {
 
               <QuestionDisplay
                 question={
-                  aiMessage ||
-                  welcomeMessage ||
+                  extractQuestion(aiMessage) ||
+                  extractQuestion(welcomeMessage) ||
                   INTERVIEW_QUESTIONS[currentQuestionIndex]
                 }
                 isActive={isInterviewActive}
