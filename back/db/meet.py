@@ -24,11 +24,11 @@ def makeMeet(sessionID: str, meetID: str, total_questions: int, technical_topics
     meets.insert_one({
         "user_id": user_id,
         "meet_id": meetID,
-        "questionAsked": 0,
-        "candidate_questions": ['intro of candidate', 'strengths and weaknesses', 'tech stack', 'candidate preferences', 'interests'],
         "total_questions": total_questions+2,
-        "technical_topics": technical_topics,
+        "candidate_questions": ['intro of candidate', 'strengths and weaknesses', 'tech stack', 'candidate preferences', 'interests'],
+        "technical_questions": technical_topics,
         "dsa_questions": dsa_questions,
+        "question_asked": 0,
         "createdAt": datetime.utcnow()
     })
     print("MONGO INSERTED ID:")

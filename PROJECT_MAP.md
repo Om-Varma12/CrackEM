@@ -339,7 +339,7 @@ CrackEM/
   "questions": Number,     // Total questions to ask
   "firstHalfQ": Number,   // Warmup questions count
   "secondHalfQ": Number,  // Technical questions count
-  "questionAsked": Number, // Current question index
+  "question_asked": Number, // Current question index
   "createdAt": DateTime
 }
 ```
@@ -463,11 +463,11 @@ CrackEM/
 **Current State**:
 ```python
 # In agent.py
-if questionAsked == 0:           # First question
+if question_asked == 0:           # First question
     → starterAgent
-elif questionAsked <= firstHalfQ: # Warmup phase
+elif question_asked <= firstHalfQ: # Warmup phase
     → starterAgent
-elif questionAsked < total:       # Future: technical phase
+elif question_asked < total:       # Future: technical phase
     → starterAgent (placeholder)
 ```
 

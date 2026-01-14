@@ -17,11 +17,7 @@ def getNoOfAskedQs(meetID: str):
     meet = meets.find_one({"meet_id": meetID})
     # print("MEET FETCHED FROM DB:", meet)
     return {
-        "candidate_questions": meet["candidate_questions"],
-        "total_questions": meet["total_questions"],
-        "technical_topics": meet["technical_topics"],
-        "dsa_questions": meet["dsa_questions"],
-        "questionAsked": meet["questionAsked"],
+        "question_asked": meet["question_asked"],
     }
 
 # print(getNoOfAskedQs("pprdmw8ktoxeoktwe0ma"))

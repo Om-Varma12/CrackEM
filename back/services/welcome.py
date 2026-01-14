@@ -9,4 +9,4 @@ def sayFirstMessage(session_id: str, meetID: str):
     message = "Hello " + name + "! " + s
     # putMessage(meetID, message, "Jarvis")
     
-    return "start"
+    return "Hello there, lets start the interview!"

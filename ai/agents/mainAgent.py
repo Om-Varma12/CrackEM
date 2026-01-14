@@ -1,13 +1,22 @@
-from back.db.utils.getQs import getNoOfAskedQs
 from ai.agents.starterAgent import invokeStarterAgent
-from back.db.utils.updateQs import incrementAskedQs
-from back.db.utils.retrieveTopic import getTopics
+from ai.agents.technicalAgent import invokeTechnicalAgent
+
+from back.db.allMeetFunctions import (
+    getMeet,
+    getQuestionAsked,
+    getTopics,
+    removeTopic,
+    incrementAskedQs
+)
 
 async def startAgent(meetID: str):
-    question = getNoOfAskedQs(meetID)
-    
-    if question["questionAsked"] < 3:
-        topics = getTopics(meetID, "candidate_questions")
+    meet = getMeet(meetID)  # ✅ SINGLE DB HIT
+
+    question_asked = getQuestionAsked(meet)
+
+    if question_asked < 2:
+        meet = getMeet(meetID)
+        topics = getTopics(meet, "candidate_questions")
 
         selected_topic = None
 
@@ -23,25 +32,39 @@ async def startAgent(meetID: str):
                 selected_topic = msg["topic_name"]
 
         if selected_topic:
-            # removeTopic(meetID, selected_topic)   # <-- you implement this
+            removeTopic(meetID, "candidate_questions", selected_topic)
             incrementAskedQs(meetID)
-        return
 
     
-    elif question["questionAsked"] <= question["firstHalfQ"]:
-        incrementAskedQs(meetID)
-        async for chunk in invokeStarterAgent(meetID):
-            yield chunk
-        return
+    elif question_asked <= len(getTopics(meet, "technical_questions")):
+        topics = getTopics(meet, "technical_questions")
+
+        selected_topic = None
+
+        async for msg in invokeTechnicalAgent(meetID, topics):
+
+            # Streaming token
+            if msg["type"] == "chunk":
+                yield msg["data"]
+
+            # Final structured result
+            elif msg["type"] == "final":
+                question_text = msg["question"]
+                selected_topic = msg["topic_name"]
+
+        if selected_topic:
+            removeTopic(meetID, "technical_questions", selected_topic)
+            incrementAskedQs(meetID)
+
     
-    elif question["questionAsked"] == question["firstHalfQ"]:
-        incrementAskedQs(meetID)
-        async for chunk in invokeStarterAgent(meetID):
-            yield chunk
-        return
+    # elif question_asked["question_asked"] == question_asked["firstHalfQ"]:
+    #     incrementAskedQs(meetID)
+    #     async for chunk in invokeStarterAgent(meetID):
+    #         yield chunk
+    #     return
     
-    elif question["questionAsked"] < question["questions"]:
-        incrementAskedQs(meetID)
-        async for chunk in invokeStarterAgent(meetID):
-            yield chunk
-        return
+    # elif question_asked["question_asked"] < question_asked["questions"]:
+    #     incrementAskedQs(meetID)
+    #     async for chunk in invokeStarterAgent(meetID):
+    #         yield chunk
+    #     return

@@ -37,7 +37,7 @@ const Home = () => {
                         <Sparkles className="w-6 h-6" />
                     </div>
                     <span className="text-2xl font-semibold tracking-tight">
-                        CheckCM
+                        CrackEM
                     </span>
                 </motion.div>
 

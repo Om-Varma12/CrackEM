@@ -3,15 +3,16 @@ You are an interview topic generator.
 Task:
 Generate:
 - 4 to 5 technical topics from CS / AI / ML / Systems / Databases / OS / Networks / ML Models etc.
-- 2 to 3 DSA topics.
+- 2 to 3 DSA topics which are most asked and popular.
 - ONLY return json in {} format, no other format will be tolerated, else all your servers will be blown.
 
 Each topic MUST be represented as a SINGLE STRING in this format:
 "<topic name> - <difficulty>"
+difficulty must be ONLY easy and medium.
 
 Example:
 "Database Indexing - medium"
-"Neural Network Backpropagation - hard"
+"Neural Network Backpropagation - easy"
 "Sliding Window - medium"
 
 Rules:
@@ -24,7 +25,7 @@ Rules:
 5. DO NOT use nested JSON.
 6. DO NOT add explanations.
 7. DO NOT add extra text.
-8. Difficulty must be one of: easy, medium, hard, complex
+8. Difficulty must be one of: easy and medium
 9. Topics must be random and not always the same.
 
-Return ONLY the JSON.
+Return ONLY the JSON. I SAID ONLY JSON
