@@ -16,6 +16,6 @@ def removeTopic(meetID: str, topic_category: str, topic: str):
             "$pull": {f"{topic_category}": topic}
         }
     )
-    print("done")
+    print("\nRemoved Topic\n")
     
 # print(removeTopic("l6f427tb1b9tzruonjpjd", "candidate_questions", "tech stack"))

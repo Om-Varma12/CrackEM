@@ -25,6 +25,24 @@ const INTERVIEW_QUESTIONS = [
 
 type InterviewStatus = "idle" | "speaking" | "listening";
 
+// Helper: extract `question` field if incoming AI message is JSON
+const extractQuestion = (msg: string | null) => {
+  if (!msg) return msg;
+  // quick heuristic: try parse if it looks like JSON
+  const looksLikeJson = msg.trim().startsWith("{") || msg.trim().startsWith("[");
+  if (!looksLikeJson) return msg;
+  try {
+    const parsed = JSON.parse(msg);
+    if (parsed && typeof parsed === "object" && "question" in parsed) {
+      const q = (parsed as any).question;
+      return typeof q === "string" ? q : JSON.stringify(q);
+    }
+    return msg;
+  } catch (e) {
+    return msg;
+  }
+};
+
 const Index = () => {
 
   const user = useAuthStore((s) => s.user);
@@ -67,10 +85,15 @@ const Index = () => {
     }
   }, []);
 
+  const currentQuestion = extractQuestion(aiMessage) ||
+    extractQuestion(welcomeMessage) ||
+    INTERVIEW_QUESTIONS[currentQuestionIndex];
+
   useSpeechRecognition(
     isInterviewActive && isMicOn,
     meetID ?? undefined,
-    handleAiResponse
+    handleAiResponse,
+    currentQuestion
   );
 
   /* =====================
@@ -109,23 +132,7 @@ const Index = () => {
     setWelcomeMessage(null);
   }, []);
 
-  // Helper: extract `question` field if incoming AI message is JSON
-  const extractQuestion = (msg: string | null) => {
-    if (!msg) return msg;
-    // quick heuristic: try parse if it looks like JSON
-    const looksLikeJson = msg.trim().startsWith("{") || msg.trim().startsWith("[");
-    if (!looksLikeJson) return msg;
-    try {
-      const parsed = JSON.parse(msg);
-      if (parsed && typeof parsed === "object" && "question" in parsed) {
-        const q = (parsed as any).question;
-        return typeof q === "string" ? q : JSON.stringify(q);
-      }
-      return msg;
-    } catch (e) {
-      return msg;
-    }
-  };
+
 
   /* =====================
      RENDER

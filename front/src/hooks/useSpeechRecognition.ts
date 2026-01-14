@@ -11,30 +11,50 @@ interface UseSpeechRecognitionReturn {
  * Hook for speech recognition using Web Speech API
  * Sends transcribed text to backend via WebSocket
  */
-export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiResponse?: (text: string, isDone: boolean) => void): UseSpeechRecognitionReturn => {
+export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiResponse?: (text: string, isDone: boolean) => void, lastLLMResponse?: string | null): UseSpeechRecognitionReturn => {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const isRecognizingRef = useRef(false);
   const sentenceBufferRef = useRef<string>('');
   const interimBufferRef = useRef<string>('');
   const silenceTimeoutRef = useRef<number | null>(null);
+  const lastLLMResponseRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    lastLLMResponseRef.current = lastLLMResponse || null;
+  }, [lastLLMResponse]);
 
   const lastInterimSentRef = useRef<number>(0);
   const aiResponseBufferRef = useRef<string>('');
   const SILENCE_DURATION = 1000; // 600ms of silence before sending final sentence
   const INTERIM_THROTTLE_MS = 400; // send interim updates at most once every 400ms
 
+  // Queue outgoing messages while the socket is not open
+  const sendQueueRef = useRef<Array<{type: string; text: string; clearBuffer?: boolean}>>([]);
+  const wsBackoffRef = useRef<number>(0);
+  const wsReconnectTimeoutRef = useRef<number | null>(null);
+
   const sendSentence = useCallback((sentence: string, type: 'transcript' | 'interim' = 'transcript', clearBuffer = false) => {
-    if (!sentence.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (!sentence.trim()) return;
+
+    // If socket not ready, queue the message
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      sendQueueRef.current.push({ type, text: sentence.trim(), clearBuffer });
+      console.debug('Queued transcript (socket not open):', sentence.trim());
+      if (clearBuffer && type === 'transcript') {
+        sentenceBufferRef.current = '';
+      }
       return;
     }
 
     try {
       const payload: any = {
         type,
-        text: sentence.trim()
+        text: sentence.trim(),
+        lastLLMResponse: lastLLMResponseRef.current
       };
 
+      console.debug('Sending transcript:', payload);
       wsRef.current.send(JSON.stringify(payload));
       if (clearBuffer && type === 'transcript') {
         sentenceBufferRef.current = '';
@@ -74,15 +94,19 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
         lastInterimSentRef.current = now;
       }
 
-      // Also set a silence timeout to promote interim to final when user pauses
-      // silenceTimeoutRef.current = window.setTimeout(() => {
-      //   if (sentenceBufferRef.current) {
-      //     sendSentence(sentenceBufferRef.current, 'transcript', true);
-      //   } else if (interimBufferRef.current) {
-      //     // Promote interim to final if nothing buffered
-      //     sendSentence(interimBufferRef.current, 'transcript', true);
-      //   }
-      // }, SILENCE_DURATION);
+      // Set a silence timeout to promote interim to final when user pauses
+      silenceTimeoutRef.current = window.setTimeout(() => {
+        silenceTimeoutRef.current = null;
+        if (sentenceBufferRef.current) {
+          // If we already have a buffered sentence, send it as final
+          sendSentence(sentenceBufferRef.current, 'transcript', true);
+        } else if (interimBufferRef.current) {
+          // Promote interim to final if nothing buffered
+          console.debug('Promoting interim to final:', interimBufferRef.current);
+          sendSentence(interimBufferRef.current, 'transcript', true);
+          interimBufferRef.current = '';
+        }
+      }, SILENCE_DURATION);
     }
   }, [sendSentence]);
 
@@ -106,67 +130,120 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
 
     try {
       // Create WebSocket connection (include meetID if available)
+      // Use a helper to handle reconnect and queueing of outgoing messages.
       const wsUrlBase = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/transcript';
       const wsUrl = meetID ? `${wsUrlBase}?meetID=${encodeURIComponent(meetID)}` : wsUrlBase;
-      const ws = new WebSocket(wsUrl);
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket connection closed');
-      };
-
-      wsRef.current = ws;
-
-      // Listen for AI responses from the server and handle TTS / UI callback
-      ws.onmessage = (evt: MessageEvent) => {
-        try {
-          const data = JSON.parse(evt.data);
-          
-          if (data.type === 'ai_response_chunk' && data.text) {
-             aiResponseBufferRef.current += data.text;
-             if (onAiResponse) {
-               onAiResponse(aiResponseBufferRef.current, false);
-             }
-          } else if (data.type === 'ai_response_done') {
-             if (onAiResponse) {
-               onAiResponse(aiResponseBufferRef.current, true);
-             }
-             // Reset buffer after done
-             aiResponseBufferRef.current = '';
-          } else if (data.type === 'ai_response' && data.text) {
-            // Fallback / legacy support
-            console.log('AI response received:', data.text);
-            const rawText = data.text;
-
-            if (onAiResponse) {
-              onAiResponse(rawText, true);
-            } else {
-              // Try to extract `question` field if the AI response is JSON
-              let speakText = rawText;
-              const looksLikeJson = typeof rawText === 'string' && (rawText.trim().startsWith('{') || rawText.trim().startsWith('['));
-              if (looksLikeJson) {
-                try {
-                  const parsed = JSON.parse(rawText);
-                  if (parsed && typeof parsed === 'object' && 'question' in parsed) {
-                    const q = (parsed as any).question;
-                    speakText = typeof q === 'string' ? q : JSON.stringify(q);
-                  }
-                } catch (e) {
-                  // ignore parse errors
-                }
-              }
-
-              const utterance = new SpeechSynthesisUtterance(speakText);
-              window.speechSynthesis.speak(utterance);
-            }
+      const flushQueue = (socket: WebSocket) => {
+        while (sendQueueRef.current.length > 0 && socket.readyState === WebSocket.OPEN) {
+          const item = sendQueueRef.current.shift();
+          try {
+            socket.send(JSON.stringify({ type: item!.type, text: item!.text }));
+          } catch (e) {
+            console.error('Error flushing queued message:', e);
+            break;
           }
-        } catch (e) {
-          console.error('Error parsing WebSocket message:', e);
         }
       };
+
+      const scheduleReconnect = () => {
+        if (!isRecognizingRef.current) return;
+        wsBackoffRef.current = Math.min(6, wsBackoffRef.current + 1); // cap attempts
+        const delay = Math.min(30000, 500 * Math.pow(1.8, wsBackoffRef.current));
+        if (wsReconnectTimeoutRef.current) {
+          window.clearTimeout(wsReconnectTimeoutRef.current);
+        }
+        wsReconnectTimeoutRef.current = window.setTimeout(() => {
+          if (!isRecognizingRef.current) return;
+          connectWebSocket();
+        }, delay);
+      };
+
+      const connectWebSocket = () => {
+        try {
+          // Avoid creating duplicate connections
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+          const socket = new WebSocket(wsUrl);
+
+          socket.onopen = () => {
+            console.log('WebSocket connection opened');
+            wsBackoffRef.current = 0;
+            flushQueue(socket);
+          };
+
+          socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+          };
+
+          socket.onclose = () => {
+            console.log('WebSocket connection closed');
+            // Replace reference and schedule reconnect if recognition is active
+            if (wsRef.current === socket) {
+              wsRef.current = null;
+            }
+            if (isRecognizingRef.current) {
+              scheduleReconnect();
+            }
+          };
+
+          // Replace wsRef and attach message handler
+          wsRef.current = socket;
+
+          socket.onmessage = (evt: MessageEvent) => {
+            try {
+              const data = JSON.parse(evt.data);
+              
+              if (data.type === 'ai_response_chunk' && data.text) {
+                 aiResponseBufferRef.current += data.text;
+                 if (onAiResponse) {
+                   onAiResponse(aiResponseBufferRef.current, false);
+                 }
+              } else if (data.type === 'ai_response_done') {
+                 if (onAiResponse) {
+                   onAiResponse(aiResponseBufferRef.current, true);
+                 }
+                 // Reset buffer after done
+                 aiResponseBufferRef.current = '';
+              } else if (data.type === 'ai_response' && data.text) {
+                // Fallback / legacy support
+                console.log('AI response received:', data.text);
+                const rawText = data.text;
+
+                if (onAiResponse) {
+                  onAiResponse(rawText, true);
+                } else {
+                  // Try to extract `question` field if the AI response is JSON
+                  let speakText = rawText;
+                  const looksLikeJson = typeof rawText === 'string' && (rawText.trim().startsWith('{') || rawText.trim().startsWith('['));
+                  if (looksLikeJson) {
+                    try {
+                      const parsed = JSON.parse(rawText);
+                      if (parsed && typeof parsed === 'object' && 'question' in parsed) {
+                        const q = (parsed as any).question;
+                        speakText = typeof q === 'string' ? q : JSON.stringify(q);
+                      }
+                    } catch (e) {
+                      // ignore parse errors
+                    }
+                  }
+
+                  const utterance = new SpeechSynthesisUtterance(speakText);
+                  window.speechSynthesis.speak(utterance);
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing WebSocket message:', e);
+            }
+          };
+
+        } catch (error) {
+          console.error('Error connecting WebSocket:', error);
+          scheduleReconnect();
+        }
+      };
+
+      // Start initial WebSocket
+      connectWebSocket();
 
       // Initialize Speech Recognition
       const recognition = new SpeechRecognition();
@@ -201,7 +278,7 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
       recognition.onend = () => {
         handleEnd();
         // Auto-restart recognition if still enabled (small delay for reliability)
-        if (isRecognizingRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+        if (isRecognizingRef.current) {
           setTimeout(() => {
             try {
               recognition.start();
@@ -249,6 +326,14 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
       wsRef.current.close();
       wsRef.current = null;
     }
+
+    // Clear any pending reconnect attempts
+    if (wsReconnectTimeoutRef.current) {
+      window.clearTimeout(wsReconnectTimeoutRef.current);
+      wsReconnectTimeoutRef.current = null;
+    }
+    wsBackoffRef.current = 0;
+    sendQueueRef.current = [];
 
     sentenceBufferRef.current = '';
   }, [sendSentence]);

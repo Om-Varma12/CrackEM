@@ -7,13 +7,15 @@ import time
 from back.utils.sentenceEnhancer import enhance
 from back.db.utils.messages import putMessage
 from ai.agents.mainAgent import startAgent
+from ai.agents.validationAgent import validate
+from ai.agents.followupAgent import followUp
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.websocket("/ws/transcript")
-async def websocket_transcript(websocket: WebSocket, meetID: str | None = None):
+async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, lastLLMResponse: str | None = None):
     await websocket.accept()
     logger.info("WebSocket connection established")
 
@@ -64,47 +66,77 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None):
 
                     # Debounced delayed processing
                     async def delayed_process(text_snapshot: str, version_snapshot: int):
+                        nonlocal lastLLMResponse   # 🔥 THIS FIXES IT
+
                         try:
                             await asyncio.sleep(ENHANCE_DELAY)
 
-                            # If a newer transcript arrived, abort
                             if version_snapshot != transcript_version:
                                 return
 
-                            # Optional: ignore very short junk
-                            if len(text_snapshot.split()) < 2:
+                            if not text_snapshot.strip():
                                 return
 
-                            # --- Run enhancer in thread (non-blocking) ---
-                            # newS = await asyncio.to_thread(enhance, text_snapshot)
-                            
-                            # # If enhancer changed too much, fallback to original
-                            # if abs(len(newS) - len(text_snapshot)) > 0.5 * len(text_snapshot):
-                            #     newS = text_snapshot
-
-                            # # If it changed names or important words, fallback
-                            # if "om" in text_snapshot.lower() and "om" not in newS.lower():
-                            #     newS = text_snapshot
-
-                            # # Never allow multi-line or explanations
-                            # newS = newS.split("\n")[0].strip()
-
-                            # newS = newS.strip()
-                            # print(f"[ENHANCED]: {newS}", flush=True)
-
-                            # Save to DB=
                             putMessage(meetID, text_snapshot, "user")
 
-                            # --- Stream agent response ---
-                            async for chunk in startAgent(meetID):
+                            result = await validate(lastLLMResponse or "", text_snapshot)
+                            print("VALIDATION RESULT =", result, flush=True)
+
+                            status = (result.get("status") or "").lower().strip()
+
+                            if status == "success":
+                                user_answer = text_snapshot
+
+                                if lastLLMResponse and lastLLMResponse.strip():
+                                    followup_result = await followUp(meetID, lastLLMResponse, user_answer)
+
+                                    if followup_result["status"] == "followup_needed":
+                                        followup_question = followup_result["message"]
+
+                                        await websocket.send_text(json.dumps({
+                                            "type": "ai_response_chunk",
+                                            "text": followup_question
+                                        }))
+
+                                        await websocket.send_text(json.dumps({
+                                            "type": "ai_response_done"
+                                        }))
+
+                                        lastLLMResponse = followup_question
+                                        return
+
+                                final_answer = ""
+
+                                async for chunk in startAgent(meetID):
+                                    final_answer += chunk
+                                    await websocket.send_text(json.dumps({
+                                        "type": "ai_response_chunk",
+                                        "text": chunk
+                                    }))
+
+                                lastLLMResponse = final_answer
+
                                 await websocket.send_text(json.dumps({
-                                    "type": "ai_response_chunk",
-                                    "text": chunk
+                                    "type": "ai_response_done"
                                 }))
 
-                            await websocket.send_text(json.dumps({
-                                "type": "ai_response_done"
-                            }))
+
+                            else:
+                                msg = result.get("message", "Validation failed")
+                                # Send like normal AI response (but in one chunk)
+                                await websocket.send_text(json.dumps({
+                                    "type": "ai_response_chunk",
+                                    "text": msg
+                                }))
+
+                                await websocket.send_text(json.dumps({
+                                    "type": "ai_response_done"
+                                }))
+
+                                # Also update lastLLMResponse so next answer is validated against this
+                                lastLLMResponse = msg
+
+                                return
 
                         except asyncio.CancelledError:
                             return

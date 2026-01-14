@@ -17,4 +17,3 @@ def putMessage(meetID: str, message: str, sender: str):
         "sender": sender,
         "sentAt": datetime.utcnow()
     })
-    

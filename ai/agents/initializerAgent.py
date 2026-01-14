@@ -36,8 +36,21 @@ def getTopicsForInterview():
     except Exception as e:
         print("JSON PARSE FAILED:", e)
         print("TEXT WAS:", final_text)
-        raise
-
+        return{
+            "technical_topics": [
+                "Convolutional Neural Network Architecture - easy",
+                "Redis In-Memory Data Store - medium",
+                "Kubernetes Cluster Management - medium",
+                "Hash Table Collision Resolution - medium",
+                "Graph-Based Recommendation Systems - easy"
+            ],
+            "dsa_questions": [
+                "0/1 Knapsack Problem - medium",
+                "Tower of Hanoi Algorithm - easy",
+                "Minimum Window Substring - medium"
+            ]
+        }
+        # hardcoded fallback in-case llm still return other than json format to continue the application
 
     print("\ndone generating topics\n\n")
     return df

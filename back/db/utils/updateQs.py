@@ -12,7 +12,7 @@ meets = db["meets"]
 def incrementAskedQs(meetID: str):
     meets.update_one(
         {"meet_id": meetID},      
-        {"$inc": {"questionAsked": 1}} 
+        {"$inc": {"question_asked": 1}} 
     )
     
 # print(incrementAskedQs("pro3j789xhenpyh4oodzhl"))
