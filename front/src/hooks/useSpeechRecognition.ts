@@ -26,8 +26,9 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
 
   const lastInterimSentRef = useRef<number>(0);
   const aiResponseBufferRef = useRef<string>('');
-  const SILENCE_DURATION = 1000; // 600ms of silence before sending final sentence
-  const INTERIM_THROTTLE_MS = 400; // send interim updates at most once every 400ms
+  const lastResultTimestampRef = useRef<number>(0);
+  const SILENCE_DURATION = 1000; // ms of silence before sending final sentence (shorter for responsiveness)
+  const INTERIM_THROTTLE_MS = 300; // send interim updates at most once every 300ms
 
   // Queue outgoing messages while the socket is not open
   const sendQueueRef = useRef<Array<{type: string; text: string; clearBuffer?: boolean}>>([]);
@@ -37,12 +38,13 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
   const sendSentence = useCallback((sentence: string, type: 'transcript' | 'interim' = 'transcript', clearBuffer = false) => {
     if (!sentence.trim()) return;
 
-    // If socket not ready, queue the message
+    // If socket not ready, queue the message (preserve clearBuffer and log queue size)
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       sendQueueRef.current.push({ type, text: sentence.trim(), clearBuffer });
-      console.debug('Queued transcript (socket not open):', sentence.trim());
+      console.debug('Queued transcript (socket not open):', sentence.trim(), 'queueSize=', sendQueueRef.current.length, 'wsState=', wsRef.current?.readyState);
       if (clearBuffer && type === 'transcript') {
         sentenceBufferRef.current = '';
+        interimBufferRef.current = '';
       }
       return;
     }
@@ -54,10 +56,11 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
         lastLLMResponse: lastLLMResponseRef.current
       };
 
-      console.debug('Sending transcript:', payload);
+      console.debug('Sending transcript:', payload, 'wsState=', wsRef.current?.readyState, 'queueSize=', sendQueueRef.current.length);
       wsRef.current.send(JSON.stringify(payload));
       if (clearBuffer && type === 'transcript') {
         sentenceBufferRef.current = '';
+        interimBufferRef.current = '';
       }
     } catch (error) {
       console.error('Error sending transcript:', error);
@@ -70,6 +73,9 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
     const isFinal = lastResult.isFinal;
 
     if (!transcript.trim()) return;
+
+    // Update timestamp for most recent result
+    lastResultTimestampRef.current = Date.now();
 
     // Clear previous silence timeout
     if (silenceTimeoutRef.current !== null) {
@@ -85,6 +91,9 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
         sentenceBufferRef.current = transcript;
       }
       sendSentence(sentenceBufferRef.current, 'transcript', true);
+      // Clear interim buffer after final
+      interimBufferRef.current = '';
+      lastInterimSentRef.current = 0;
     } else {
       // Interim result: send throttled interim updates
       interimBufferRef.current = transcript;
@@ -100,20 +109,25 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
         if (sentenceBufferRef.current) {
           // If we already have a buffered sentence, send it as final
           sendSentence(sentenceBufferRef.current, 'transcript', true);
-        } else if (interimBufferRef.current) {
-          // Promote interim to final if nothing buffered
-          console.debug('Promoting interim to final:', interimBufferRef.current);
-          sendSentence(interimBufferRef.current, 'transcript', true);
-          interimBufferRef.current = '';
-        }
+        }// else if (interimBufferRef.current) {
+        //   // Promote interim to final if nothing buffered
+        //   console.debug('Promoting interim to final:', interimBufferRef.current);
+        //   sendSentence(interimBufferRef.current, 'transcript', true);
+        //   interimBufferRef.current = '';
+        //}
       }, SILENCE_DURATION);
     }
   }, [sendSentence]);
 
   const handleEnd = useCallback(() => {
-    // Send any remaining sentence when recognition ends
-    if (sentenceBufferRef.current.trim()) {
-      sendSentence(sentenceBufferRef.current, 'transcript', true);
+    // Send any remaining sentence when recognition ends only if it wasn't a very recent result
+    const now = Date.now();
+    if (now - lastResultTimestampRef.current > SILENCE_DURATION) {
+      if (sentenceBufferRef.current.trim()) {
+        sendSentence(sentenceBufferRef.current, 'transcript', true);
+      }
+    } else {
+      console.debug('handleEnd: deferring send because last result was recent');
     }
   }, [sendSentence]);
 
@@ -137,13 +151,19 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
       const flushQueue = (socket: WebSocket) => {
         while (sendQueueRef.current.length > 0 && socket.readyState === WebSocket.OPEN) {
           const item = sendQueueRef.current.shift();
+          if (!item) break;
           try {
-            socket.send(JSON.stringify({ type: item!.type, text: item!.text }));
+            socket.send(JSON.stringify({ type: item.type, text: item.text, lastLLMResponse: lastLLMResponseRef.current }));
+            if (item.clearBuffer && item.type === 'transcript') {
+              sentenceBufferRef.current = '';
+              interimBufferRef.current = '';
+            }
           } catch (e) {
             console.error('Error flushing queued message:', e);
             break;
           }
         }
+        console.debug('Flush complete, remaining queue size=', sendQueueRef.current.length);
       };
 
       const scheduleReconnect = () => {
@@ -166,7 +186,7 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
           const socket = new WebSocket(wsUrl);
 
           socket.onopen = () => {
-            console.log('WebSocket connection opened');
+            console.log('WebSocket connection opened, queueSize=', sendQueueRef.current.length);
             wsBackoffRef.current = 0;
             flushQueue(socket);
           };
@@ -175,8 +195,8 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
             console.error('WebSocket error:', error);
           };
 
-          socket.onclose = () => {
-            console.log('WebSocket connection closed');
+          socket.onclose = (evt: CloseEvent) => {
+            console.log('WebSocket connection closed', evt.code, evt.reason);
             // Replace reference and schedule reconnect if recognition is active
             if (wsRef.current === socket) {
               wsRef.current = null;
@@ -252,11 +272,24 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
       recognition.lang = 'en-US';
       recognition.maxAlternatives = 1;
 
-      recognition.onresult = handleResult;
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // update timestamp for last received result
+        lastResultTimestampRef.current = Date.now();
+        handleResult(event);
+      };
+
+      recognition.onstart = () => {
+        console.debug('Speech recognition started');
+      };
+
+      recognition.onnomatch = (event: SpeechRecognitionEvent) => {
+        console.debug('Speech recognition no match:', event);
+      };
+
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error('Speech recognition error:', event.error);
+        console.error('Speech recognition error:', event.error, event);
         if (event.error === 'no-speech') {
-          // No speech detected, send pending sentence if exists
+          // No speech detected, send pending sentence if enough time has passed
           if (sentenceBufferRef.current.trim()) {
             sendSentence(sentenceBufferRef.current, 'transcript', true);
           }
@@ -276,7 +309,14 @@ export const useSpeechRecognition = (isEnabled: boolean, meetID?: string, onAiRe
       };
 
       recognition.onend = () => {
-        handleEnd();
+        // If recognition ended but the last result was very recent, defer sending to allow restart
+        const now = Date.now();
+        if (now - lastResultTimestampRef.current > SILENCE_DURATION) {
+          handleEnd();
+        } else {
+          console.debug('Recognition ended shortly after a result; deferring final send to allow restart');
+        }
+
         // Auto-restart recognition if still enabled (small delay for reliability)
         if (isRecognizingRef.current) {
           setTimeout(() => {

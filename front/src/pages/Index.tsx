@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -69,6 +69,8 @@ const Index = () => {
   /* =====================
      AI / SPEECH HANDLING
   ====================== */
+  const speechCtlRef = useRef<{startRecognition?: () => Promise<void>; stopRecognition?: () => void}>({});
+
   const handleAiResponse = useCallback((text: string, done: boolean) => {
     setAiMessage(text);
 
@@ -79,8 +81,23 @@ const Index = () => {
       window.speechSynthesis.cancel();
       setStatus("speaking");
 
+      // Pause recognition to avoid feedback / interruptions while TTS plays
+      try {
+        speechCtlRef.current.stopRecognition?.();
+      } catch (e) {
+        // ignore
+      }
+
       const utterance = new SpeechSynthesisUtterance(speakText);
-      utterance.onend = () => setStatus("listening");
+      utterance.onend = () => {
+        setStatus("listening");
+        // Resume recognition after speaking
+        try {
+          speechCtlRef.current.startRecognition?.();
+        } catch (e) {
+          // ignore
+        }
+      };
       window.speechSynthesis.speak(utterance);
     }
   }, []);
@@ -89,12 +106,18 @@ const Index = () => {
     extractQuestion(welcomeMessage) ||
     INTERVIEW_QUESTIONS[currentQuestionIndex];
 
-  useSpeechRecognition(
+  const { startRecognition, stopRecognition } = useSpeechRecognition(
     isInterviewActive && isMicOn,
     meetID ?? undefined,
     handleAiResponse,
     currentQuestion
   );
+
+  // expose control handles to callback via ref
+  useEffect(() => {
+    speechCtlRef.current.startRecognition = startRecognition;
+    speechCtlRef.current.stopRecognition = stopRecognition;
+  }, [startRecognition, stopRecognition]);
 
   /* =====================
      INTERVIEW ACTIONS

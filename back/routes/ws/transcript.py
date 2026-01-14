@@ -17,16 +17,11 @@ router = APIRouter()
 @router.websocket("/ws/transcript")
 async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, lastLLMResponse: str | None = None):
     await websocket.accept()
-    logger.info("WebSocket connection established")
-
-    if meetID:
-        logger.info(f"WebSocket connected with meetID={meetID}")
-    else:
-        logger.info("WebSocket connected without meetID; will accept meetID from incoming messages if provided")
-
     # State
     last_transcript = ""
     transcript_version = 0
+    # Store lastLLMResponse as a local variable that can be updated
+    current_last_response = lastLLMResponse  # Initialize from query param if provided
 
     ENHANCE_DELAY = 0.8  # seconds
 
@@ -41,16 +36,16 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, 
             try:
                 message = json.loads(data)
 
+                # --- UPDATE: Extract lastLLMResponse from message ---
+                if message.get("lastLLMResponse"):
+                    current_last_response = message.get("lastLLMResponse")
+                    # print(f"[DEBUG] Updated lastLLMResponse from message: {current_last_response[:100] if current_last_response else 'None'}", flush=True)
+
                 # --- Interim messages (just logging) ---
                 if message.get("type") == "interim" and message.get("text"):
                     interim = message["text"].strip()
                     if interim:
                         print(f"[USER - interim]: {interim}", flush=True)
-
-                # --- Capture meetID if sent later ---
-                # if message.get("meetID") and not meetID:
-                #     meetID = message.get("meetID")
-                #     logger.info(f"Received meetID from client message: {meetID}")
 
                 # --- Final transcript message ---
                 if message.get("type") == "transcript" and message.get("text"):
@@ -66,32 +61,40 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, 
 
                     # Debounced delayed processing
                     async def delayed_process(text_snapshot: str, version_snapshot: int):
-                        nonlocal lastLLMResponse   # 🔥 THIS FIXES IT
+                        nonlocal current_last_response  # ← Use current_last_response instead
 
                         try:
                             await asyncio.sleep(ENHANCE_DELAY)
 
                             if version_snapshot != transcript_version:
+                                print(f"[DEBUG] Skipping stale transcript version {version_snapshot}", flush=True)
                                 return
 
                             if not text_snapshot.strip():
+                                print(f"[DEBUG] Skipping empty transcript", flush=True)
                                 return
 
                             putMessage(meetID, text_snapshot, "user")
 
-                            result = await validate(lastLLMResponse or "", text_snapshot)
-                            print("VALIDATION RESULT =", result, flush=True)
+                            print(f"[DEBUG] Validating response...", flush=True)
+                            result = await validate(meetID, current_last_response or "", text_snapshot)
+                            print(f"[DEBUG] VALIDATION RESULT = {result}", flush=True)
 
                             status = (result.get("status") or "").lower().strip()
 
                             if status == "success":
                                 user_answer = text_snapshot
 
-                                if lastLLMResponse and lastLLMResponse.strip():
-                                    followup_result = await followUp(meetID, lastLLMResponse, user_answer)
-
+                                if current_last_response and current_last_response.strip():
+                                    # print(f"[DEBUG] Checking followup for question: {current_last_response[:100]}", flush=True)
+                                    print(f"[DEBUG] User answer: {user_answer[:100]}", flush=True)
+                                    
+                                    followup_result = await followUp(meetID, current_last_response, user_answer)
+                                    print(f"\n\n[DEBUG] FOLLOWUP RESULT = {followup_result}", flush=True)
+                                    
                                     if followup_result["status"] == "followup_needed":
                                         followup_question = followup_result["message"]
+                                        print(f"[DEBUG] Sending followup question: {followup_question[:100]}", flush=True)
 
                                         await websocket.send_text(json.dumps({
                                             "type": "ai_response_chunk",
@@ -102,9 +105,15 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, 
                                             "type": "ai_response_done"
                                         }))
 
-                                        lastLLMResponse = followup_question
+                                        current_last_response = followup_question
+                                        print(f"[DEBUG] Updated current_last_response, exiting delayed_process", flush=True)
                                         return
+                                    else:
+                                        print(f"[DEBUG] No followup needed, proceeding to main agent", flush=True)
+                                else:
+                                    print(f"[DEBUG] No current_last_response, skipping followup check", flush=True)
 
+                                print(f"[DEBUG] Starting main agent...", flush=True)
                                 final_answer = ""
 
                                 async for chunk in startAgent(meetID):
@@ -114,16 +123,17 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, 
                                         "text": chunk
                                     }))
 
-                                lastLLMResponse = final_answer
+                                current_last_response = final_answer
+                                print(f"[DEBUG] Main agent complete, updated current_last_response", flush=True)
 
                                 await websocket.send_text(json.dumps({
                                     "type": "ai_response_done"
                                 }))
 
-
                             else:
+                                print(f"[DEBUG] Validation failed: {result.get('message')}", flush=True)
                                 msg = result.get("message", "Validation failed")
-                                # Send like normal AI response (but in one chunk)
+                                
                                 await websocket.send_text(json.dumps({
                                     "type": "ai_response_chunk",
                                     "text": msg
@@ -133,15 +143,15 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, 
                                     "type": "ai_response_done"
                                 }))
 
-                                # Also update lastLLMResponse so next answer is validated against this
-                                lastLLMResponse = msg
-
+                                current_last_response = msg
                                 return
 
                         except asyncio.CancelledError:
+                            print(f"[DEBUG] delayed_process cancelled", flush=True)
                             return
                         except Exception as e:
-                            logger.error(f"Error in delayed_process: {e}", exc_info=True)
+                            logger.error(f"[DEBUG] Error in delayed_process: {e}", exc_info=True)
+                            print(f"[DEBUG] Exception in delayed_process: {e}", flush=True)
 
                     # Fire and forget task
                     asyncio.create_task(delayed_process(transcript, my_version))
@@ -150,7 +160,6 @@ async def websocket_transcript(websocket: WebSocket, meetID: str | None = None, 
                 logger.warning(f"Error processing message: {e}", exc_info=True)
 
     except WebSocketDisconnect:
-        logger.info("WebSocket connection closed")
         print("\n" + "="*50)
         print("Interview session ended")
         print("="*50 + "\n")

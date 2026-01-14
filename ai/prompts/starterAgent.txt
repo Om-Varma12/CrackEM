@@ -22,6 +22,7 @@ IMPORTANT:
 - If you violate this, the output is considered INVALID.
 - You must treat <topics> as the ONLY source of truth.
 - Dont ask questions like what brings you here today.
+- Remaining topics should start like, cool, ok, let move on to the next question.
 
 CRITICAL RULES:
 - You MUST return ONLY valid JSON.
